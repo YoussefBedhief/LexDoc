@@ -225,7 +225,7 @@ export default async function DashboardPage() {
           Actions rapides
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link href="/dashboard/documents/new">
+          <Link href="/dashboard/templates">
             <div className="group flex items-center gap-4 p-4 rounded-2xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-stone-200 text-white dark:text-stone-900 transition-colors cursor-pointer">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 dark:bg-stone-900/10">
                 <FilePlus2 className="h-5 w-5" />
