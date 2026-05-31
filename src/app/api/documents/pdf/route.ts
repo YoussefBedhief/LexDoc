@@ -41,40 +41,43 @@ export async function POST(req: Request) {
     // IMPORTANT: Google Fonts Arabic (NO base64)
     await page.setContent(
       `
-      <!DOCTYPE html>
-      <html lang="ar">
-      <head>
-        <meta charset="UTF-8" />
+     <!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
 
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+    }
 
-        <style>
-          * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: white;
+      font-family: 'Times New Roman', serif;
+      direction: rtl;
+    }
 
-          body {
-            margin: 0;
-            padding: 40px 50px;
-            font-family: "Noto Naskh Arabic", serif;
-            font-size: 16px;
-            line-height: 2;
-            direction: rtl;
-            color: #111;
-          }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm 25mm;
+      box-sizing: border-box;
+    }
 
-          #root {
-            font-family: "Noto Naskh Arabic", serif;
-          }
+    p { margin: 0 0 8px 0; }
+    h2 { margin: 20px 0; }
 
-          p, span, div, h2 {
-            font-family: "Noto Naskh Arabic", serif;
-          }
-        </style>
-      </head>
+  </style>
+</head>
 
-      <body>
-        <div id="root"></div>
-      </body>
-      </html>
+<body>
+  <div class="page">
+    ${content}
+  </div>
+</body>
+</html>
       `,
       { waitUntil: "domcontentloaded" },
     );
