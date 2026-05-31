@@ -27,7 +27,7 @@ import { useState } from "react";
 
 const navItems = [
   {
-    label: "Dashboard",
+    label: "Tableau de bord",
     href: "/dashboard",
     icon: LayoutDashboard,
     exact: true,
