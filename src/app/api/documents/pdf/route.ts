@@ -66,22 +66,23 @@ export async function POST(req: Request) {
 <html lang="ar">
   <head>
     <meta charset="UTF-8" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Amiri..."
-      rel="stylesheet"
-    />
+    <style>
+      * { box-sizing: border-box; }
     <style>
       * { box-sizing: border-box; }
       body {
-        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 40px 50px;
+        font-family: "Times New Roman", Times, serif;
         font-size: 13pt;
         line-height: 1.8;
         color: #1a1a1a;
-        padding: 0;
-        margin: 0;
       }
-      p { margin-bottom: 0.5em; }
-      h2 { font-size: 15pt; font-weight: bold; }
+      pre {
+        white-space: pre-wrap;
+        font-family: inherit;
+        font-size: inherit;
+      }
     </style>
   </head>
   <body id="root"></body>
