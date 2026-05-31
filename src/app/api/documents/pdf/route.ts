@@ -53,7 +53,7 @@ export async function POST(req: Request) {
 
           body {
             margin: 0;
-            padding: "20mm 25mm",
+            padding: 50px 54px;
             font-family: "Noto Naskh Arabic", serif;
             font-size: 13pt;
             line-height: 1.8;
