@@ -20,12 +20,79 @@ async function getBrowser() {
     });
   } else {
     const puppeteer = (await import("puppeteer")).default;
-
     return puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
   }
+}
+
+// Wrap le contenu HTML dans une page complète avec polices Google pour l'arabe
+function buildHtmlPage(content: string): string {
+  return `<!DOCTYPE html>
+<html lang="ar">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Police Google Fonts pour l'arabe (Noto Naskh Arabic) chargée en base64
+      pour éviter les problèmes de réseau dans Puppeteer Lambda.
+      On utilise un @import direct — Puppeteer attend networkidle2 pour s'assurer
+      que la police est chargée avant le rendu.
+    -->
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+      crossorigin="anonymous"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Amiri", "Noto Naskh Arabic", "Times New Roman", serif;
+        font-size: 13pt;
+        line-height: 1.8;
+        color: #1a1a1a;
+        padding: 0;
+        margin: 0;
+      }
+
+      /* Assure que le contenu arabe s'affiche correctement */
+      [dir="rtl"], p, div, span, h1, h2, h3 {
+        font-family: "Amiri", "Noto Naskh Arabic", "Times New Roman", serif;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        font-family: inherit;
+        font-size: inherit;
+      }
+
+      /* Reset des marges pour les paragraphes générés */
+      p {
+        margin-bottom: 0.5em;
+      }
+
+      h2 {
+        font-size: 15pt;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    ${content}
+  </body>
+</html>`;
 }
 
 export const maxDuration = 60;
@@ -61,32 +128,19 @@ export async function POST(req: Request) {
     browser = await getBrowser();
     const page = await browser.newPage();
 
-    await page.setContent(
-      `<!DOCTYPE html>
-      <html lang="fr">
-        <head>
-          <meta charset="UTF-8" />
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              padding: 40px 50px;
-              font-family: "Times New Roman", Times, serif;
-              font-size: 13pt;
-              line-height: 1.8;
-              color: #1a1a1a;
-            }
-            pre {
-              white-space: pre-wrap;
-              font-family: inherit;
-              font-size: inherit;
-            }
-          </style>
-        </head>
-        <body>${content}</body>
-      </html>`,
-      { waitUntil: "load" },
-    );
+    // Autorise le chargement des polices Google Fonts
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "fr-FR,fr;q=0.9,ar;q=0.8",
+    });
+
+    await page.setContent(buildHtmlPage(content), {
+      // networkidle2 attend que les polices Google Fonts soient chargées
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+
+    // S'assure que les polices sont bien appliquées avant le rendu PDF
+    await page.evaluateHandle("document.fonts.ready");
 
     const pdf = await page.pdf({
       format: "A4",
