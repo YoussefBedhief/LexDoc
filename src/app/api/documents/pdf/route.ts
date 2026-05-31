@@ -4,24 +4,53 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 async function getBrowser() {
-  const chromium = (await import("@sparticuz/chromium-min")).default;
-  const puppeteer = (await import("puppeteer-core")).default;
+  if (process.env.NODE_ENV === "production") {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const puppeteer = (await import("puppeteer-core")).default;
 
-  return puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: { width: 1280, height: 800 },
-    executablePath: await chromium.executablePath(
-      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar",
-    ),
-    headless: true,
-  });
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: { width: 1280, height: 800 },
+      executablePath: await chromium.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar",
+      ),
+      headless: true,
+    });
+  } else {
+    const puppeteer = (await import("puppeteer")).default;
+
+    return puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
 }
+
+// ✅ FONT ARABE STABLE (Vercel SAFE)
+async function loadArabicFontBase64() {
+  const url =
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/notonaskharabic/NotoNaskhArabic-Regular.ttf";
+
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+
+  return Buffer.from(buffer).toString("base64");
+}
+
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   let browser;
 
   try {
     const { documentId } = await req.json();
+
+    if (!documentId) {
+      return NextResponse.json(
+        { error: "Missing document id" },
+        { status: 400 },
+      );
+    }
 
     const doc = await db
       .select()
@@ -30,7 +59,10 @@ export async function POST(req: Request) {
       .limit(1);
 
     if (!doc[0]) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Document not found" },
+        { status: 404 },
+      );
     }
 
     const { content, title } = doc[0];
@@ -38,83 +70,97 @@ export async function POST(req: Request) {
     browser = await getBrowser();
     const page = await browser.newPage();
 
-    // IMPORTANT: Google Fonts Arabic (NO base64)
+    const fontBase64 = await loadArabicFontBase64();
+
+    // ✅ PAGE HTML
     await page.setContent(
       `
-     <!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
+      <!DOCTYPE html>
+      <html lang="ar">
+        <head>
+          <meta charset="UTF-8" />
+          <style>
+            @font-face {
+              font-family: "ArabicFont";
+              src: url(data:font/ttf;base64,${fontBase64}) format("truetype");
+            }
 
-  <style>
-    @page {
-      size: A4;
-      margin: 0;
-    }
+            * {
+              box-sizing: border-box;
+            }
 
-    body {
-      margin: 0;
-      background: white;
-      font-family: 'Times New Roman', serif;
-      direction: rtl;
-    }
+            body {
+              margin: 0;
+              padding: 40px 50px;
+              font-family: "ArabicFont", Arial, sans-serif;
+              font-size: 14px;
+              line-height: 2;
+              color: #1a1a1a;
+              direction: rtl;
+            }
 
-    .page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: 20mm 25mm;
-      box-sizing: border-box;
-    }
+            p {
+              margin: 0 0 10px 0;
+            }
 
-    p { margin: 0 0 8px 0; }
-    h2 { margin: 20px 0; }
+            h2 {
+              text-align: center;
+              margin: 30px 0;
+            }
+          </style>
+        </head>
 
-  </style>
-</head>
-
-<body>
-  <div class="page">
-    ${content}
-  </div>
-</body>
-</html>
+        <body>
+          <div id="root"></div>
+        </body>
+      </html>
       `,
-      { waitUntil: "domcontentloaded" },
+      { waitUntil: "load" },
     );
 
-    // inject content
-    await page.evaluate((html) => {
-      document.getElementById("root")!.innerHTML = html;
+    // inject HTML content from DB
+    await page.evaluate((htmlContent) => {
+      const root = document.getElementById("root");
+      if (root) root.innerHTML = htmlContent;
     }, content);
 
-    // 🔥 CRUCIAL FIX: wait for fonts + rendering
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-
-      // force layout recalculation (important for Arabic)
-      document.body.innerHTML = document.body.innerHTML;
-    });
-
-    // extra safety delay (Chromium Vercel fix)
-    await new Promise((r) => setTimeout(r, 1000));
+    // wait fonts ready
+    await page.evaluate(() => document.fonts?.ready);
 
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      preferCSSPageSize: true,
+      margin: {
+        top: "20mm",
+        bottom: "20mm",
+        left: "20mm",
+        right: "20mm",
+      },
     });
 
     await browser.close();
 
+    const asciiTitle =
+      title
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\x20-\x7E]/g, "_")
+        .trim() || "document";
+
     return new Response(Buffer.from(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${title}.pdf"`,
+        "Content-Disposition": `attachment; filename="${asciiTitle}.pdf"`,
       },
     });
-  } catch (e) {
-    if (browser) await browser.close();
-    console.error(e);
+  } catch (err) {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {}
+    }
+
+    console.error("[PDF ERROR]", err);
 
     return NextResponse.json(
       { error: "PDF generation failed" },
