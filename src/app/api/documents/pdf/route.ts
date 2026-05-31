@@ -1,9 +1,7 @@
 import { db } from "@/src/db";
 import { documents } from "@/src/db/schema/documents";
 import { eq } from "drizzle-orm";
-import fs from "fs";
 import { NextResponse } from "next/server";
-import path from "path";
 
 async function getBrowser() {
   if (process.env.NODE_ENV === "production") {
@@ -26,6 +24,17 @@ async function getBrowser() {
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
   }
+}
+
+// ✅ FONT ARABE STABLE (Vercel SAFE)
+async function loadArabicFontBase64() {
+  const url =
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/notonaskharabic/NotoNaskhArabic-Regular.ttf";
+
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+
+  return Buffer.from(buffer).toString("base64");
 }
 
 export const maxDuration = 60;
@@ -61,14 +70,9 @@ export async function POST(req: Request) {
     browser = await getBrowser();
     const page = await browser.newPage();
 
-    // ✅ FIX ARABE: police embarquée locale (OBLIGATOIRE pour Vercel)
-    const fontPath = path.join(
-      process.cwd(),
-      "public/fonts/NotoNaskhArabic-Regular.ttf",
-    );
+    const fontBase64 = await loadArabicFontBase64();
 
-    const fontBase64 = fs.readFileSync(fontPath).toString("base64");
-
+    // ✅ PAGE HTML
     await page.setContent(
       `
       <!DOCTYPE html>
@@ -105,6 +109,7 @@ export async function POST(req: Request) {
             }
           </style>
         </head>
+
         <body>
           <div id="root"></div>
         </body>
@@ -113,13 +118,13 @@ export async function POST(req: Request) {
       { waitUntil: "load" },
     );
 
-    // inject HTML
+    // inject HTML content from DB
     await page.evaluate((htmlContent) => {
       const root = document.getElementById("root");
       if (root) root.innerHTML = htmlContent;
     }, content);
 
-    // attendre fonts
+    // wait fonts ready
     await page.evaluate(() => document.fonts?.ready);
 
     const pdf = await page.pdf({
