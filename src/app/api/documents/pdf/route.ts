@@ -1,25 +1,26 @@
 import { db } from "@/src/db";
 import { documents } from "@/src/db/schema/documents";
 import { eq } from "drizzle-orm";
+import fs from "fs";
 import { NextResponse } from "next/server";
+import path from "path";
 
 async function getBrowser() {
   if (process.env.NODE_ENV === "production") {
     const chromium = (await import("@sparticuz/chromium-min")).default;
     const puppeteer = (await import("puppeteer-core")).default;
 
-    const CHROMIUM_REMOTE_URL =
-      process.env.CHROMIUM_REMOTE_URL ??
-      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
-
     return puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 800 },
-      executablePath: await chromium.executablePath(CHROMIUM_REMOTE_URL),
+      executablePath: await chromium.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar",
+      ),
       headless: true,
     });
   } else {
     const puppeteer = (await import("puppeteer")).default;
+
     return puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -60,53 +61,76 @@ export async function POST(req: Request) {
     browser = await getBrowser();
     const page = await browser.newPage();
 
-    // Étape 1 : charge une page de base vide avec les polices
-    await page.setContent(
-      `<!DOCTYPE html>
-<html lang="ar">
-  <head>
-    <meta charset="UTF-8" />
-    <style>
-      * { box-sizing: border-box; }
-    <style>
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        padding: 40px 50px;
-        font-family: "Times New Roman", Times, serif;
-        font-size: 13pt;
-        line-height: 1.8;
-        color: #1a1a1a;
-      }
-      pre {
-        white-space: pre-wrap;
-        font-family: inherit;
-        font-size: inherit;
-      }
-    </style>
-  </head>
-  <body id="root"></body>
-</html>`,
-      { waitUntil: "load", timeout: 30000 },
+    // ✅ FIX ARABE: police embarquée locale (OBLIGATOIRE pour Vercel)
+    const fontPath = path.join(
+      process.cwd(),
+      "public/fonts/NotoNaskhArabic-Regular.ttf",
     );
 
-    // Laisse le temps aux polices Google Fonts de se charger
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const fontBase64 = fs.readFileSync(fontPath).toString("base64");
 
-    // Étape 2 : injecte le contenu HTML via innerHTML après le chargement des polices
-    // Ceci évite tout problème d'échappement lors du setContent
-    await page.evaluate((htmlContent: string) => {
+    await page.setContent(
+      `
+      <!DOCTYPE html>
+      <html lang="ar">
+        <head>
+          <meta charset="UTF-8" />
+          <style>
+            @font-face {
+              font-family: "ArabicFont";
+              src: url(data:font/ttf;base64,${fontBase64}) format("truetype");
+            }
+
+            * {
+              box-sizing: border-box;
+            }
+
+            body {
+              margin: 0;
+              padding: 40px 50px;
+              font-family: "ArabicFont", Arial, sans-serif;
+              font-size: 14px;
+              line-height: 2;
+              color: #1a1a1a;
+              direction: rtl;
+            }
+
+            p {
+              margin: 0 0 10px 0;
+            }
+
+            h2 {
+              text-align: center;
+              margin: 30px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="root"></div>
+        </body>
+      </html>
+      `,
+      { waitUntil: "load" },
+    );
+
+    // inject HTML
+    await page.evaluate((htmlContent) => {
       const root = document.getElementById("root");
       if (root) root.innerHTML = htmlContent;
     }, content);
 
-    // Étape 3 : attend que les polices soient appliquées au nouveau contenu
-    await page.evaluateHandle("document.fonts.ready");
+    // attendre fonts
+    await page.evaluate(() => document.fonts?.ready);
 
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "20mm", bottom: "20mm", left: "20mm", right: "20mm" },
+      margin: {
+        top: "20mm",
+        bottom: "20mm",
+        left: "20mm",
+        right: "20mm",
+      },
     });
 
     await browser.close();
@@ -116,15 +140,12 @@ export async function POST(req: Request) {
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^\x20-\x7E]/g, "_")
-        .replace(/[\\"/]/g, "_")
         .trim() || "document";
-
-    const encodedTitle = encodeURIComponent(title.trim() || "document");
 
     return new Response(Buffer.from(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${asciiTitle}.pdf"; filename*=UTF-8''${encodedTitle}.pdf`,
+        "Content-Disposition": `attachment; filename="${asciiTitle}.pdf"`,
       },
     });
   } catch (err) {
@@ -133,9 +154,11 @@ export async function POST(req: Request) {
         await browser.close();
       } catch {}
     }
-    console.error("[PDF] Erreur de génération :", err);
+
+    console.error("[PDF ERROR]", err);
+
     return NextResponse.json(
-      { error: "Échec de la génération du PDF." },
+      { error: "PDF generation failed" },
       { status: 500 },
     );
   }
