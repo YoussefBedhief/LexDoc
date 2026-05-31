@@ -176,7 +176,6 @@ export async function POST(req: Request) {
     .where(eq(users.clerkUserId, clerkUserId))
     .limit(1);
 
-  console.log({ dbUser });
   if (!dbUser) {
     return NextResponse.json(
       { error: "User not found in database" },

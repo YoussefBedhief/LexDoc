@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.4.1",
-    "@sparticuz/chromium": "^147.0.0",
+    "@sparticuz/chromium-min": "^147.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",

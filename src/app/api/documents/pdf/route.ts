@@ -5,13 +5,17 @@ import { NextResponse } from "next/server";
 
 async function getBrowser() {
   if (process.env.NODE_ENV === "production") {
-    const chromium = (await import("@sparticuz/chromium")).default;
+    const chromium = (await import("@sparticuz/chromium-min")).default;
     const puppeteer = (await import("puppeteer-core")).default;
+
+    const CHROMIUM_REMOTE_URL =
+      process.env.CHROMIUM_REMOTE_URL ??
+      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
 
     return puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 800 },
-      executablePath: await chromium.executablePath(),
+      executablePath: await chromium.executablePath(CHROMIUM_REMOTE_URL),
       headless: true,
     });
   } else {
