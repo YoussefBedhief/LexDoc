@@ -27,74 +27,6 @@ async function getBrowser() {
   }
 }
 
-// Wrap le contenu HTML dans une page complète avec polices Google pour l'arabe
-function buildHtmlPage(content: string): string {
-  return `<!DOCTYPE html>
-<html lang="ar">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!--
-      Police Google Fonts pour l'arabe (Noto Naskh Arabic) chargée en base64
-      pour éviter les problèmes de réseau dans Puppeteer Lambda.
-      On utilise un @import direct — Puppeteer attend networkidle2 pour s'assurer
-      que la police est chargée avant le rendu.
-    -->
-    <link
-      rel="preconnect"
-      href="https://fonts.googleapis.com"
-      crossorigin="anonymous"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap"
-      rel="stylesheet"
-    />
-
-    <style>
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        font-family: "Amiri", "Noto Naskh Arabic", "Times New Roman", serif;
-        font-size: 13pt;
-        line-height: 1.8;
-        color: #1a1a1a;
-        padding: 0;
-        margin: 0;
-      }
-
-      /* Assure que le contenu arabe s'affiche correctement */
-      [dir="rtl"], p, div, span, h1, h2, h3 {
-        font-family: "Amiri", "Noto Naskh Arabic", "Times New Roman", serif;
-      }
-
-      pre {
-        white-space: pre-wrap;
-        font-family: inherit;
-        font-size: inherit;
-      }
-
-      /* Reset des marges pour les paragraphes générés */
-      p {
-        margin-bottom: 0.5em;
-      }
-
-      h2 {
-        font-size: 15pt;
-        font-weight: bold;
-      }
-    </style>
-  </head>
-  <body>
-    ${content}
-  </body>
-</html>`;
-}
-
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
@@ -128,18 +60,46 @@ export async function POST(req: Request) {
     browser = await getBrowser();
     const page = await browser.newPage();
 
-    // Autorise le chargement des polices Google Fonts
-    await page.setExtraHTTPHeaders({
-      "Accept-Language": "fr-FR,fr;q=0.9,ar;q=0.8",
-    });
+    // Étape 1 : charge une page de base vide avec les polices
+    await page.setContent(
+      `<!DOCTYPE html>
+<html lang="ar">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: "Amiri", "Times New Roman", serif;
+        font-size: 13pt;
+        line-height: 1.8;
+        color: #1a1a1a;
+        padding: 0;
+        margin: 0;
+      }
+      p { margin-bottom: 0.5em; }
+      h2 { font-size: 15pt; font-weight: bold; }
+    </style>
+  </head>
+  <body id="root"></body>
+</html>`,
+      { waitUntil: "load", timeout: 30000 },
+    );
 
-    await page.setContent(buildHtmlPage(content), {
-      // networkidle2 attend que les polices Google Fonts soient chargées
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
-    });
+    // Laisse le temps aux polices Google Fonts de se charger
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
-    // S'assure que les polices sont bien appliquées avant le rendu PDF
+    // Étape 2 : injecte le contenu HTML via innerHTML après le chargement des polices
+    // Ceci évite tout problème d'échappement lors du setContent
+    await page.evaluate((htmlContent: string) => {
+      const root = document.getElementById("root");
+      if (root) root.innerHTML = htmlContent;
+    }, content);
+
+    // Étape 3 : attend que les polices soient appliquées au nouveau contenu
     await page.evaluateHandle("document.fonts.ready");
 
     const pdf = await page.pdf({
@@ -172,7 +132,6 @@ export async function POST(req: Request) {
         await browser.close();
       } catch {}
     }
-
     console.error("[PDF] Erreur de génération :", err);
     return NextResponse.json(
       { error: "Échec de la génération du PDF." },
