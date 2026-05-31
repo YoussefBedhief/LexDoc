@@ -35,8 +35,8 @@ const navItems = [
   { label: "Templates", href: "/dashboard/templates", icon: Layers },
   { label: "Documents", href: "/dashboard/documents", icon: FileText },
   {
-    label: "New Document",
-    href: "/dashboard/documents/new",
+    label: "Nouveau document",
+    href: "/dashboard/templates",
     icon: FilePlus2,
     highlight: true,
   },
