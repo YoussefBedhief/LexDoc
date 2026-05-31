@@ -67,13 +67,13 @@ export async function POST(req: Request) {
   <head>
     <meta charset="UTF-8" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Amiri..."
       rel="stylesheet"
     />
     <style>
       * { box-sizing: border-box; }
       body {
-        font-family: "Amiri", "Times New Roman", serif;
+        font-family: Arial, sans-serif;
         font-size: 13pt;
         line-height: 1.8;
         color: #1a1a1a;
