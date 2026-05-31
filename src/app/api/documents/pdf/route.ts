@@ -55,8 +55,8 @@ export async function POST(req: Request) {
             margin: 0;
             padding: 40px 50px;
             font-family: "Noto Naskh Arabic", serif;
-            font-size: 16px;
-            line-height: 2;
+            font-size: 13pt;
+            line-height: 1.8;
             direction: rtl;
             color: #111;
           }
